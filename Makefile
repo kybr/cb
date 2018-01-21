@@ -10,16 +10,16 @@ LIB += -l uv
 _: udp udp-echo udp-send
 
 %.o: %.cpp
-	$(CXX) $(INC) $(LIB) -c $^
+	$(CXX) $(INC) -c -o $@ $<
 
 udp: udp.o
-	$(CXX) $(INC) $(LIB) -o $@ $^
+	$(CXX) $(LIB) -o $@ $^
 
 udp-echo: udp-echo.o
-	$(CXX) $(INC) $(LIB) -o $@ $^
+	$(CXX) $(LIB) -o $@ $^
 
 udp-send: udp-send.o
-	$(CXX) $(INC) $(LIB) -o $@ $^
+	$(CXX) $(LIB) -o $@ $^
 
 clean:
 	rm udp-echo udp-send udp *.o
