@@ -1,0 +1,6 @@
+[submodule "uvw"]
+	path = uvw
+	url = https://github.com/skypjack/uvw.git
+[submodule "oscpkt"]
+	path = oscpkt
+	url = https://github.com/eddietree/oscpkt.git

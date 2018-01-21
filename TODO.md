@@ -1,0 +1,4 @@
+- test how big a packet we can bounce off the loopback device
+- try to determine if we have any neighbors and ping one
+- test how big a packet we can bounce off neighbors
+- 
