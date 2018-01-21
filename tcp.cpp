@@ -2,6 +2,7 @@
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <string.h> // gcc puts memcpy here
 #include <uvw.hpp>
 
 void listen(uvw::Loop &loop) {

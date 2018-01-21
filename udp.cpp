@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <string.h> // gcc puts memcpy here
 #include <uvw.hpp>
 
 int main(int argc, char *argv[]) {
