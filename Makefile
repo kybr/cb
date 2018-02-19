@@ -7,10 +7,16 @@ CXX += -g
 INC += -I uvw/src
 LIB += -l uv
 
-_: udp udp-echo udp-send
+_: broadcast receive udp udp-echo udp-send
 
 %.o: %.cpp
 	$(CXX) $(INC) -c -o $@ $<
+
+receive: receive.o
+	$(CXX) $(LIB) -o $@ $^
+
+broadcast: broadcast.o
+	$(CXX) $(LIB) -o $@ $^
 
 udp: udp.o
 	$(CXX) $(LIB) -o $@ $^
@@ -22,4 +28,4 @@ udp-send: udp-send.o
 	$(CXX) $(LIB) -o $@ $^
 
 clean:
-	rm udp-echo udp-send udp *.o
+	rm broadcast receive udp-echo udp-send udp *.o

@@ -1,15 +1,15 @@
 // https://skypjack.github.io/uvw/index.html
 // https://github.com/skypjack/uvw
+#include <string.h>  // gcc puts memcpy here?
 #include <cassert>
 #include <chrono>
 #include <iostream>
 #include <memory>
-#include <string.h> // gcc puts memcpy here
 #include <uvw.hpp>
 
 int main(int argc, char *argv[]) {
-  const std::string address = argv[1];
-  const unsigned int port = atoi(argv[2]);
+  const std::string address = (argc > 1) ? argv[1] : "127.0.0.1";
+  const unsigned int port = (argc > 2) ? atoi(argv[2]) : 65535;
 
   auto loop = uvw::Loop::getDefault();
 

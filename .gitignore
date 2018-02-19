@@ -1,4 +1,7 @@
 udp
 udp-echo
 udp-send
+a.out
+broadcast
+receive
 *.o
