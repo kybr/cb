@@ -7,10 +7,16 @@ CXX += -g
 INC += -I uvw/src
 LIB += -l uv
 
-_: broadcast receive udp udp-echo udp-send
+_: main
+#_: main broadcast receive udp udp-echo udp-send
 
 %.o: %.cpp
 	$(CXX) $(INC) -c -o $@ $<
+
+main.o: cb.hpp main.cpp
+
+main: main.o
+	$(CXX) $(LIB) -o $@ $^
 
 receive: receive.o
 	$(CXX) $(LIB) -o $@ $^
