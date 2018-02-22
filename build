@@ -1,0 +1,3 @@
+#!/bin/sh
+
+c++ -std=c++14 -g -Wall $1.cpp -I uvw/src -l uv -o $1
