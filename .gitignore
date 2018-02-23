@@ -1,7 +1,4 @@
-udp
-udp-echo
-udp-send
-a.out
-broadcast
-receive
+.vscode/
+cb.code-workspace
 *.o
+*.exe
