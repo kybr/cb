@@ -7,6 +7,11 @@ CXX += -g
 INC += -I uvw/src
 LIB += -l uv
 
+# this is macOS/Homebrew-specific
+INC += -I/usr/local/opt/openssl/include
+LIB += -L/usr/local/opt/openssl/lib
+LIB += -lcrypto
+
 _: main
 #_: main broadcast receive udp udp-echo udp-send
 

@@ -1,9 +1,20 @@
+// TODO
+// - needs timeouts to detect when stuff does not get returned
+// - ideally, this would use ICMP broadcast to:
+//   + find hosts
+//   + determine packet size
+// - this should be compared to the MTU to report fragmentation
+//
+//
+//
+
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include <uvw.hpp>
 using namespace std;
+using namespace uvw;
 
 int main(int argc, char* argv[]) {
   uint16_t mode = (argc > 1) ? stoi(argv[1]) : 0;
@@ -15,11 +26,11 @@ int main(int argc, char* argv[]) {
   unsigned top, bottom;
   vector<char> buffer;
 
-  auto loop = uvw::Loop::getDefault();
+  auto loop = Loop::getDefault();
 
-  auto socket = loop->resource<uvw::UDPHandle>();
+  auto socket = loop->resource<UDPHandle>();
 
-  socket->on<uvw::ErrorEvent>([&](const auto& error, auto& handle) {
+  socket->on<ErrorEvent>([&](const auto& error, auto& handle) {
     printf("didn't send %u\n", guess);
     top = guess;
     guess = guess - (guess - bottom) / 2;
@@ -48,12 +59,16 @@ int main(int argc, char* argv[]) {
       socket->multicastTtl(0);
       break;
   }
-  // route back to this machine through the loopback
+
+  // XXX What TTL and loopback mean:
+  // - route back to this machine through the loopback
   // socket->multicastLoop(false);
-  // 0 means don't send on the network; 1 means keep it to the subnet
+  // - 0 means don't send on the network;
+  // - 1 means keep it to the subnet
+  // - >1 is all about networks larger than the LAN
   // socket->multicastTtl(0);
 
-  socket->on<uvw::UDPDataEvent>([&](const auto& data, auto& handle) {
+  socket->on<UDPDataEvent>([&](const auto& data, auto& handle) {
     printf("received %u\n", guess);
 
     if (bottom == guess) {

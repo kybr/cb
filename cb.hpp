@@ -1,12 +1,30 @@
 #ifndef __CB__
 #define __CB__
 
-#define t(x)                                                            \
+#define test(x)                                                         \
   do {                                                                  \
     if (!x) {                                                           \
       fprintf(stderr, "ERROR| in %s at line %d\n", __FILE__, __LINE__); \
       fprintf(stderr, "ERROR| trying " #x);                             \
     }                                                                   \
+  } while (0)
+
+#ifdef __INFO__
+#define info(x, ...)                                                 \
+  do {                                                               \
+    fprintf(stdout, "INFO| in %s at line %d\n", __FILE__, __LINE__); \
+    fprintf(stdout, "INFO| " x, ##__VA_ARGS__);                      \
+  } while (0)
+#else
+#define info(x, ...) \
+  do {               \
+  } while (0)
+#endif
+
+#define warn(x, ...)                                                 \
+  do {                                                               \
+    fprintf(stderr, "WARN| in %s at line %d\n", __FILE__, __LINE__); \
+    fprintf(stderr, "WARN| " x, ##__VA_ARGS__);                      \
   } while (0)
 
 #include <string.h>
@@ -27,7 +45,7 @@ namespace cb {
 struct Header {
   // 64b
   uint8_t sequenceNumber;
-  uint8_t data[7];
+  uint8_t flag[7];
   // 64b
   uint32_t dataSize;
   uint16_t fragmentSize;
@@ -44,7 +62,7 @@ class Broadcaster {
   string interface = "0.0.0.0";
 
   // libuv stuff
-  shared_ptr<uvw::UDPHandle> sender;
+  shared_ptr<uvw::UDPHandle> socket;
 
   // data bookkeeping
   vector<char> buffer;
@@ -59,36 +77,37 @@ class Broadcaster {
 
  public:
   void start(shared_ptr<uvw::Loop> loop) {
-    sender = loop->resource<uvw::UDPHandle>();
+    socket = loop->resource<uvw::UDPHandle>();
 
-    sender->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
-      cerr << "server failed: " << error.what() << endl;
+    socket->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
+      warn("server failed: %s", error.what());
+      exit(1);
 
       // handle transmission errors by backing off packet size
       //
       //
 
-      exit(1);
     });
 
-    sender->bind(interface, SERVER_PORT);
-    t(sender->multicastInterface(interface));
-    t(sender->multicastLoop(true));
-    t(sender->multicastTtl(4));
+    socket->bind(interface, SERVER_PORT);
+    test(socket->multicastInterface(interface));
+    test(socket->multicastLoop(true));
+    test(socket->multicastTtl(4));
 
     // listen
-    sender->on<uvw::UDPDataEvent>([](const auto& data, auto& handle) {
+    socket->on<uvw::UDPDataEvent>([](const auto& data, auto& handle) {
       // TODO make this a proper ACK with type, time, and fragmentIndex
       if (data.length == 0)
-        cout << "Broadcaster received ACK from " << data.sender.ip << endl;
+        info("Broadcaster received ACK from %s\n", data.sender.ip.c_str());
       else
-        cout << data.length << " bytes from " << data.sender.ip << endl;
+        info("Receiver %u bytes from %s\n", data.length,
+             data.sender.ip.c_str());
     });
 
-    sender->recv();
+    socket->recv();
   }
 
-  void loopback(bool value) { t(sender->multicastLoop(value)); }
+  void loopback(bool value) { test(socket->multicastLoop(value)); }
 
   bool size(unsigned packetSize) {
     // TODO this should set the packet size, live
@@ -100,7 +119,7 @@ class Broadcaster {
   }
 
   void transmit(char* data, size_t size) {
-    printf("sizeof(Header): %lu\n", sizeof(Header));
+    info("sizeof(Header): %lu\n", sizeof(Header));
 
     // (we hope) one-time setup of data headers and such
     //
@@ -108,21 +127,21 @@ class Broadcaster {
     if (dataSize != size) {
       // if (size < packetSize) packetSize = sizeof(Header) + size;
       dataSize = size;
-      printf("dataSize: %llu\n", dataSize);
+      info("dataSize: %llu\n", dataSize);
 
       if (dataSize < packetSize - sizeof(Header))
         packetSize = dataSize + sizeof(Header);
-      printf("packetSize: %u\n", packetSize);
+      info("packetSize: %u\n", packetSize);
 
       fragmentSize = packetSize - sizeof(Header);
-      printf("fragmentSize: %u\n", fragmentSize);
+      info("fragmentSize: %u\n", fragmentSize);
 
       finalFragmentSize = dataSize % fragmentSize;
-      printf("finalFragmentSize: %u\n", finalFragmentSize);
+      info("finalFragmentSize: %u\n", finalFragmentSize);
 
       packetCount = dataSize / fragmentSize;
       if (finalFragmentSize) packetCount++;
-      printf("packetCount: %u\n", packetCount);
+      info("packetCount: %u\n", packetCount);
 
       buffer.resize(dataSize + packetCount * sizeof(Header));
 
@@ -146,22 +165,22 @@ class Broadcaster {
     char* b = &buffer[0] + sizeof(Header);
     char* d = &data[0];
     for (unsigned i = 0; i < packetCount - 1; ++i) {
-      (*b)++;  // increment sequenceNumber
+      (*h)++;  // increment sequenceNumber
       memcpy(b, d, fragmentSize);
-      sender->send(group, port, h, packetSize);
+      socket->send(group, port, h, packetSize);
 
       h += packetSize;
       b += packetSize;
       d += fragmentSize;
     }
     //
-    (*b)++;  // increment sequenceNumber
+    (*h)++;  // increment sequenceNumber
     if (finalFragmentSize) {
       memcpy(b, d, finalFragmentSize);
-      sender->send(group, port, h, finalFragmentSize + sizeof(Header));
+      socket->send(group, port, h, finalFragmentSize + sizeof(Header));
     } else {
       memcpy(b, d, fragmentSize);
-      sender->send(group, port, h, packetSize);
+      socket->send(group, port, h, packetSize);
     }
   }
 
@@ -179,54 +198,70 @@ class Receiver {
   string group = BROADCAST_GROUP;
   string interface = "0.0.0.0";
 
-  shared_ptr<uvw::UDPHandle> listener;
-  vector<char> buffer;  // teh datahz
+  shared_ptr<uvw::UDPHandle> socket;
   set<uint16_t> dontHave;
   uint16_t fragmentCount;  // how many to expect
   uint16_t fragmentSize = 0;
   uint8_t sequenceNumber;  // which we heard last
 
+  mutex m;              // protects these (below)
+  vector<char> buffer;  // teh datahz
+  bool hasData = false;
+
  public:
   void start(shared_ptr<uvw::Loop> loop) {
-    listener = loop->resource<uvw::UDPHandle>();
+    socket = loop->resource<uvw::UDPHandle>();
 
-    listener->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
-      cerr << "server failed: " << error.what() << endl;
+    socket->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
+      warn("server failed: %s", error.what());
       exit(1);
     });
 
-    listener->on<uvw::UDPDataEvent>([this](const auto& data, auto& handle) {
-      cout << "This is the receiver" << endl;
-      cout << "got " << data.length << " bytes from " << data.sender.ip << endl;
-      this->listener->send(data.sender.ip, SERVER_PORT, nullptr, 0);  // ack
+    socket->on<uvw::UDPDataEvent>([this](const auto& data, auto& handle) {
+      m.lock();  // XXX lock this whole method?
+
+      info("This is the receiver\n");
+      info("Received %u bytes from %s\n", data.length, data.sender.ip.c_str());
 
       const Header* header = reinterpret_cast<const Header*>(data.data.get());
 
+      // if this is the first time we got a packet or
+      // if the packet size been changed....
+      //
       if (header->dataSize != buffer.size()) {
+        //
+        //
         buffer.resize(header->dataSize);
 
-        // XXX what if this packet happens to be
+        // XXX what if this packet happens to be the final packet of a series.
+        // in that case, this next line will be a lie.
         fragmentSize = header->fragmentSize;
         uint16_t finalFragmentSize = header->dataSize % fragmentSize;
         fragmentCount = header->dataSize / fragmentSize;
         if (finalFragmentSize) fragmentCount++;
 
+        // reset the set of necessary fragments
+        //
+        dontHave.clear();
         for (uint16_t t = 0; t < fragmentCount; ++t) dontHave.insert(t);
+
         sequenceNumber = header->sequenceNumber;
       }
 
       if (header->sequenceNumber != sequenceNumber) {
+        // never gets here
+        // printf("%u started\n", header->sequenceNumber);
         // we're on to a new thing; cut bait and start over
         //
-        printf(
-            "woops! we heard a new sequence number, so we're moving on...\n");
+        info("woops! we heard a new sequence number, so we're moving on...\n");
         sequenceNumber = header->sequenceNumber;
         dontHave.clear();
         for (uint16_t t = 0; t < fragmentCount; ++t) dontHave.insert(t);
       }
 
       if (dontHave.count(header->fragmentIndex)) {
-        printf("we didn't have fragment %u; thanks!\n", header->fragmentIndex);
+        // printf("%u/%u\n", 1 + header->fragmentIndex, fragmentCount);
+        info("we didn't have fragment %u; thanks!\n", header->fragmentIndex);
         memcpy(&buffer[header->fragmentIndex * fragmentSize],
                data.data.get() + sizeof(Header), header->fragmentSize);
         dontHave.erase(header->fragmentIndex);
@@ -235,43 +270,67 @@ class Receiver {
       }
 
       if (dontHave.empty()) {
-        printf("we have a complete package\n");
+        // printf("%u done\n", header->sequenceNumber);
+        info("we have a complete package\n");
         // we have a complete package; tell someone
         //
         //
+        hasData = true;
       }
 
-      printf("sequenceNumber:%u\n", header->sequenceNumber);
-      printf("dataSize:%u\n", header->dataSize);
-      printf("fragmentSize:%hu\n", header->fragmentSize);
-      printf("fragmentIndex:%hu\n", header->fragmentIndex);
-      printf("packetSize:%lu\n", header->fragmentSize + sizeof(Header));
-      printf("fragmentCount:%hu\n", fragmentCount);
+      m.unlock();
 
-      uint16_t finalFragmentSize = header->dataSize % header->fragmentSize;
-      printf("finalFragmentSize:%hu\n", finalFragmentSize);
+      info("sequenceNumber:%u\n", header->sequenceNumber);
+      info("dataSize:%u\n", header->dataSize);
+      info("fragmentSize:%hu\n", header->fragmentSize);
+      info("fragmentIndex:%hu\n", header->fragmentIndex);
+      info("packetSize:%lu\n", header->fragmentSize + sizeof(Header));
+      info("fragmentCount:%hu\n", fragmentCount);
+      info("finalFragmentSize:%hu\n", header->dataSize % header->fragmentSize;
+
+      );
+
+      //
+      //
+      //
+      this->socket->send(data.sender.ip, SERVER_PORT, nullptr, 0);  // ack
     });
 
-    listener->bind(interface, port);
-    listener->multicastMembership(group, interface,
-                                  uvw::UDPHandle::Membership::JOIN_GROUP);
-    listener->recv();
+    socket->bind(interface, port);
+    socket->multicastMembership(group, interface,
+                                uvw::UDPHandle::Membership::JOIN_GROUP);
+    socket->recv();
   }
 
-  int receive(char* data, size_t size) {
+  bool receive(char* data, size_t size) {
+    // assume there's no new data
     //
+    bool gotNewData = false;
+
+    // if we get the lock
     //
-    //
-    //
-    return 0;
+    if (m.try_lock()) {
+      // both _newData_  and _buffer_ are protected by the lock
+      //
+      if (hasData) {
+        hasData = false;
+        gotNewData = true;  // this is the only way this can be true
+        memcpy(data, &buffer[0], size);
+      }
+
+      // always let go quickly
+      //
+      m.unlock();
+    }
+    return gotNewData;
   }
 
   template <typename T>
-  int receive(T* t) {
+  bool receive(T* t) {
     // XXX we wish we could check to see if T has any pointers!
     static_assert(std::is_trivially_copyable<T>::value,
                   "This type is not trivially copyable!");
-    receive(static_cast<char*>(t), sizeof(T));
+    return receive(reinterpret_cast<char*>(t), sizeof(T));
   }
 };
 
