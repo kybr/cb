@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include <unistd.h>
 #include <cstdlib>
 
 #include <uvw.hpp>
@@ -31,12 +32,35 @@ struct State {
 };
 
 int main() {
-  auto loop = uvw::Loop::getDefault();
-  cb::Broadcaster b;
-  cb::Receiver r;
-  b.size(9000);
-  b.start(loop);
-  r.start(loop);
+  cb::Broadcaster broadcaster;
+  broadcaster.size(9000);
+  broadcaster.start();
+
+  cb::Receiver receiver;
+  receiver.start();
+
+  cout << "waiting for char from user" << endl;
+
+  getchar();
+
+  cout << "Calling stop on broadcaster" << endl;
+  broadcaster.stop();
+
+  cout << "Calling stop on receiver" << endl;
+  receiver.stop();
+
+  return 0;
+}
+
+int __main() {
+  cb::Broadcaster broadcaster;
+  broadcaster.size(9000);
+  broadcaster.start();
+
+  cb::Receiver receiver;
+  receiver.start();
+
+  sleep(1);
 
   State *state = new State();
   unsigned char *p = reinterpret_cast<unsigned char *>(state);
@@ -44,6 +68,7 @@ int main() {
   state->n = 0;
   sprintf(state->data, "this is the truth");
 
+  auto loop = uvw::Loop::getDefault();
   auto timer = loop->resource<uvw::TimerHandle>();
   timer->on<uvw::ErrorEvent>([](const auto &error, auto &handle) {
     cout << "timer failed: " << error.what() << endl;
@@ -59,16 +84,16 @@ int main() {
     if (haveReceived) {
       h1 = sha1(state);
       // cout << h1 << " -> " << endl;
-      b.transmit(state);
+      broadcaster.transmit(state);
       state->n++;
       haveReceived = false;
     }
 
-    haveReceived = r.receive(other);
+    haveReceived = receiver.receive(other);
     if (haveReceived) {
       h2 = sha1(other);
-      //      cout << h1 << " -> " << endl;
-      //      cout << h2 << " <- " << endl;
+      cout << h1 << " -> " << endl;
+      cout << h2 << " <- " << endl;
       if (h1 != h2) {
         fprintf(stderr, "checksum failed\n");
         exit(1);
@@ -78,5 +103,20 @@ int main() {
 
   timer->start(uvw::TimerHandle::Time{20}, uvw::TimerHandle::Time{20});
 
-  return loop->run();
+  thread t([&]() {
+    loop->run();
+    cout << "main libuv loop completed" << endl;
+  });
+
+  cout << "waiting for char from user" << endl;
+
+  getchar();
+
+  receiver.stop();
+  broadcaster.stop();
+
+  loop->stop();
+  t.join();
+
+  return 0;
 }

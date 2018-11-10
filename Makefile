@@ -23,4 +23,4 @@ main.exe: main.o
 	$(CXX) $(LIB) -o $@ $^
 
 clean:
-	rm main *.o
+	rm main.exe *.o

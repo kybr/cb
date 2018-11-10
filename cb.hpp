@@ -27,12 +27,18 @@
     fprintf(stderr, "WARN| " x, ##__VA_ARGS__);                      \
   } while (0)
 
-#include <string.h>
+#include <string.h>  // memcpy
+
+#include <memory>
 #include <set>
 #include <string>
+#include <thread>
 #include <type_traits>
-#include <uvw.hpp>
 #include <vector>
+
+#include <uvw.hpp>
+
+// XXX replace with specific callouts (e.g., "using std::vector")
 using namespace std;
 
 #define SERVER_PORT (9999)
@@ -63,6 +69,8 @@ class Broadcaster {
 
   // libuv stuff
   shared_ptr<uvw::UDPHandle> socket;
+  shared_ptr<uvw::Loop> loop;
+  thread t;
 
   // data bookkeeping
   vector<char> buffer;
@@ -76,7 +84,8 @@ class Broadcaster {
   uint16_t finalFragmentSize = 0;
 
  public:
-  void start(shared_ptr<uvw::Loop> loop) {
+  void start() {
+    loop = uvw::Loop::getDefault();
     socket = loop->resource<uvw::UDPHandle>();
 
     socket->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
@@ -86,7 +95,6 @@ class Broadcaster {
       // handle transmission errors by backing off packet size
       //
       //
-
     });
 
     socket->bind(interface, SERVER_PORT);
@@ -105,6 +113,19 @@ class Broadcaster {
     });
 
     socket->recv();
+
+    // start the broadcaster in a thread
+    t = thread([&]() {
+      loop->run();
+      cout << "Broadcaster main thread completed" << endl;
+    });
+    cout << "Broadcaster started in thread" << endl;
+  }
+
+  void stop() {
+    loop->stop();
+    cout << "Broadcaster loop stopped; Waiting for join" << endl;
+    t.join();
   }
 
   void loopback(bool value) { test(socket->multicastLoop(value)); }
@@ -187,6 +208,7 @@ class Broadcaster {
   template <typename T>
   void transmit(T* t) {
     // XXX we wish we could check to see if T has any pointers!
+    // XXX use macro to define State tuple/struct
     static_assert(std::is_trivially_copyable<T>::value,
                   "This type is not trivially copyable!");
     transmit(reinterpret_cast<char*>(t), sizeof(T));
@@ -199,6 +221,9 @@ class Receiver {
   string interface = "0.0.0.0";
 
   shared_ptr<uvw::UDPHandle> socket;
+  shared_ptr<uvw::Loop> loop;
+  thread t;
+
   set<uint16_t> dontHave;
   uint16_t fragmentCount;  // how many to expect
   uint16_t fragmentSize = 0;
@@ -209,7 +234,9 @@ class Receiver {
   bool hasData = false;
 
  public:
-  void start(shared_ptr<uvw::Loop> loop) {
+  void start() {
+    loop = uvw::Loop::getDefault();
+    // loop = make_unique<uvw::Loop>(uvw::Loop::getDefault());
     socket = loop->resource<uvw::UDPHandle>();
 
     socket->on<uvw::ErrorEvent>([](const auto& error, auto& handle) {
@@ -272,9 +299,6 @@ class Receiver {
       if (dontHave.empty()) {
         // printf("%u done\n", header->sequenceNumber);
         info("we have a complete package\n");
-        // we have a complete package; tell someone
-        //
-        //
         hasData = true;
       }
 
@@ -286,9 +310,7 @@ class Receiver {
       info("fragmentIndex:%hu\n", header->fragmentIndex);
       info("packetSize:%lu\n", header->fragmentSize + sizeof(Header));
       info("fragmentCount:%hu\n", fragmentCount);
-      info("finalFragmentSize:%hu\n", header->dataSize % header->fragmentSize;
-
-      );
+      info("finalFragmentSize:%hu\n", header->dataSize % header->fragmentSize);
 
       //
       //
@@ -300,6 +322,19 @@ class Receiver {
     socket->multicastMembership(group, interface,
                                 uvw::UDPHandle::Membership::JOIN_GROUP);
     socket->recv();
+
+    // start the receiver in a thread
+    t = thread([&]() {
+      loop->run();
+      cout << "Received main thread completed" << endl;
+    });
+    cout << "Receiver started in thread" << endl;
+  }
+
+  void stop() {
+    loop->stop();
+    cout << "Receiver loop stopped; Waiting for join" << endl;
+    t.join();
   }
 
   bool receive(char* data, size_t size) {
