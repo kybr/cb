@@ -38,16 +38,12 @@
 
 #include <uvw.hpp>
 
-// XXX replace with specific callouts (e.g., "using std::vector")
-using namespace std;
-
 #define SERVER_PORT (9999)
 #define BROADCAST_PORT (10001)
 #define BROADCAST_GROUP ("232.0.0.3")
 
 namespace cb {
 
-// if we could use/abuse portions of the IP header, that would be better...
 struct Header {
   // 64b
   uint8_t sequenceNumber;
@@ -64,16 +60,16 @@ struct Header {
 
 class Broadcaster {
   uint16_t port = BROADCAST_PORT;
-  string group = BROADCAST_GROUP;
-  string interface = "0.0.0.0";
+  std::string group = BROADCAST_GROUP;
+  std::string interface = "0.0.0.0";
 
   // libuv stuff
-  shared_ptr<uvw::UDPHandle> socket;
-  shared_ptr<uvw::Loop> loop;
-  thread t;
+  std::shared_ptr<uvw::UDPHandle> socket;
+  std::shared_ptr<uvw::Loop> loop;
+  std::thread t;
 
   // data bookkeeping
-  vector<char> buffer;
+  std::vector<char> buffer;
   uint64_t dataSize = 0;
   // uint32_t packetSize = 1400;
 
@@ -115,16 +111,16 @@ class Broadcaster {
     socket->recv();
 
     // start the broadcaster in a thread
-    t = thread([&]() {
+    t = std::thread([&]() {
       loop->run();
-      cout << "Broadcaster main thread completed" << endl;
+      std::cout << "Broadcaster main thread completed" << std::endl;
     });
-    cout << "Broadcaster started in thread" << endl;
+    std::cout << "Broadcaster started in thread" << std::endl;
   }
 
   void stop() {
     loop->stop();
-    cout << "Broadcaster loop stopped; Waiting for join" << endl;
+    std::cout << "Broadcaster loop stopped; Waiting for join" << std::endl;
     t.join();
   }
 
@@ -217,20 +213,20 @@ class Broadcaster {
 
 class Receiver {
   uint16_t port = BROADCAST_PORT;
-  string group = BROADCAST_GROUP;
-  string interface = "0.0.0.0";
+  std::string group = BROADCAST_GROUP;
+  std::string interface = "0.0.0.0";
 
-  shared_ptr<uvw::UDPHandle> socket;
-  shared_ptr<uvw::Loop> loop;
-  thread t;
+  std::shared_ptr<uvw::UDPHandle> socket;
+  std::shared_ptr<uvw::Loop> loop;
+  std::thread t;
 
-  set<uint16_t> dontHave;
+  std::set<uint16_t> dontHave;
   uint16_t fragmentCount;  // how many to expect
   uint16_t fragmentSize = 0;
   uint8_t sequenceNumber;  // which we heard last
 
-  mutex m;              // protects these (below)
-  vector<char> buffer;  // teh datahz
+  std::mutex m;              // protects these (below)
+  std::vector<char> buffer;  // teh datahz
   bool hasData = false;
 
  public:
@@ -324,16 +320,16 @@ class Receiver {
     socket->recv();
 
     // start the receiver in a thread
-    t = thread([&]() {
+    t = std::thread([&]() {
       loop->run();
-      cout << "Received main thread completed" << endl;
+      std::cout << "Received main thread completed" << std::endl;
     });
-    cout << "Receiver started in thread" << endl;
+    std::cout << "Receiver started in thread" << std::endl;
   }
 
   void stop() {
     loop->stop();
-    cout << "Receiver loop stopped; Waiting for join" << endl;
+    std::cout << "Receiver loop stopped; Waiting for join" << std::endl;
     t.join();
   }
 
