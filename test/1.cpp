@@ -7,21 +7,32 @@
 #include <uvw.hpp>
 #include "cb.hpp"
 
-#include <openssl/sha.h>
-template <typename T>
-string sha1(T *t) {
-  string s = "";
-  unsigned char hash[SHA_DIGEST_LENGTH];  // == 20
-  SHA1(reinterpret_cast<unsigned char *>(t), sizeof(T), hash);
-  char buf[3];
-  for (unsigned char c : hash) {
-    sprintf(buf, "%02hhX", c);
-    s += buf;
+// https://en.wikipedia.org/wiki/Fletcher%27s_checksum
+uint16_t fletcher16(const uint8_t *data, size_t len) {
+  uint32_t c0, c1;
+  unsigned int i;
+
+  for (c0 = c1 = 0; len >= 5802; len -= 5802) {
+    for (i = 0; i < 5802; ++i) {
+      c0 = c0 + *data++;
+      c1 = c1 + c0;
+    }
+    c0 = c0 % 255;
+    c1 = c1 % 255;
   }
-  return s;
+  for (i = 0; i < len; ++i) {
+    c0 = c0 + *data++;
+    c1 = c1 + c0;
+  }
+  c0 = c0 % 255;
+  c1 = c1 % 255;
+  return (c1 << 8 | c0);
 }
 
-// SHA1(str, sizeof(str) - 1, hash);
+template <typename T>
+uint16_t sum(T *t) {
+  return fletcher16((const uint8_t *)t, sizeof(T));
+}
 
 using namespace std;
 
@@ -82,7 +93,7 @@ int __main() {
   string h1, h2;
   timer->on<uvw::TimerEvent>([&](const auto &event, auto &handle) {
     if (haveReceived) {
-      h1 = sha1(state);
+      h1 = sum(state);
       // cout << h1 << " -> " << endl;
       broadcaster.transmit(state);
       state->n++;
@@ -91,7 +102,7 @@ int __main() {
 
     haveReceived = receiver.receive(other);
     if (haveReceived) {
-      h2 = sha1(other);
+      h2 = sum(other);
       cout << h1 << " -> " << endl;
       cout << h2 << " <- " << endl;
       if (h1 != h2) {
