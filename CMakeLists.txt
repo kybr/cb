@@ -1,16 +1,15 @@
 cmake_minimum_required(VERSION 3.5)
 project(cb LANGUAGES CXX)
 
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
-
-#add_library(${PROJECT_NAME} SHARED ${library_source})
-#target_link_libraries(${PROJECT_NAME} ${library_library})
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(UV REQUIRED)
+
 list(APPEND libraries ${UV_LIBRARIES})
+
 include_directories(${UV_INCLUDE_DIR})
-include_directories(uvw/src)
-include_directories(.)
+include_directories(${PROJECT_SOURCE_DIR}/uvw/src)
+include_directories(${PROJECT_SOURCE_DIR}) # cb.hpp
 
 aux_source_directory(test source_list)
 foreach(source_file ${source_list})

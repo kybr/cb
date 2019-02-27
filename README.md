@@ -26,9 +26,10 @@ the statements above (and I will), but for now, just deal with it.**
 ### Questions?
 
 - Why not TCP?
-- Why not [PGM][]?
+- Why not [PGM]?
 - Why not use raw IP sockets?
 - Why use libuv?
+- What about [ENet]?
 
 
 [UDP]: https://www.ietf.org/rfc/rfc768.txt
@@ -37,3 +38,4 @@ the statements above (and I will), but for now, just deal with it.**
 [switch fabric]: http://etherealmind.com/what-is-the-definition-of-switch-fabric
 [PGM]: https://en.wikipedia.org/wiki/Pragmatic_General_Multicast
 [2]: https://en.wikipedia.org/wiki/Crossbar_switch
+[ENet]: http://enet.bespin.org

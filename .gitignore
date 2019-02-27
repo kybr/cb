@@ -1,3 +1,5 @@
+build/
+playground/
 .vscode/
 cb.code-workspace
 *.o
